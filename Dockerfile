@@ -1,5 +1,5 @@
-# Base image
-FROM node:18-alpine
+# Use Node 24 for runtime
+FROM node:24-alpine
 
 # Create app dir
 WORKDIR /app
