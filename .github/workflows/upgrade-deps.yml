@@ -1,0 +1,56 @@
+name: Upgrade Dependencies
+
+# This workflow updates package.json using npm-check-updates (ncu), installs updated deps
+# and commits package.json + package-lock.json back to the repository.
+# It runs on push to main (the initial addition will trigger it) and on manual dispatch.
+# The job is guarded to avoid re-running on commits that were created by this workflow.
+
+on:
+    push:
+        branches: ["main"]
+    workflow_dispatch:
+
+permissions:
+    contents: write
+
+jobs:
+    upgrade:
+        runs-on: ubuntu-latest
+        # avoid re-running if the head commit message is the automated commit
+        if: "!contains(github.event.head_commit.message, 'chore(deps): upgrade dependencies to latest')"
+
+        steps:
+            - name: Checkout
+              uses: actions/checkout@v4
+
+            - name: Setup Node.js
+              uses: actions/setup-node@v4
+              with:
+                  node-version: "24"
+
+            - name: Install npm-check-updates
+              run: npm install -g npm-check-updates
+
+            - name: Upgrade package.json dependencies to latest
+              run: ncu -u
+
+            - name: Install updated dependencies and generate package-lock.json
+              run: npm install --omit=dev
+
+            - name: Show git status
+              run: git --no-pager status --porcelain --untracked-files=no || true
+
+            - name: Commit and push changes
+              env:
+                  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+              run: |
+                  git config user.name "github-actions[bot]"
+                  git config user.email "github-actions[bot]@users.noreply.github.com"
+                  git add package.json package-lock.json || true
+                  if git diff --staged --quiet; then
+                    echo "No dependency updates were applied."
+                    exit 0
+                  else
+                    git commit -m "chore(deps): upgrade dependencies to latest" || true
+                    git push origin HEAD:main
+                  fi
