@@ -6,8 +6,8 @@ name: Upgrade Dependencies
 # The job is guarded to avoid re-running on commits that were created by this workflow.
 
 on:
-    push:
-        branches: ["main"]
+    # push:
+    #     branches: ["main"]
     workflow_dispatch:
 
 permissions:
