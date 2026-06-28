@@ -2,16 +2,13 @@ version: '3.8'
 
 services:
   relay:
-    build:
-      context: .
-      args:
-        PORT: ${PORT:-8080}
+    build: .
     image: hf-relay:latest
     restart: always
     ports:
-      - "${PORT:-8080}:${PORT:-8080}"
+      - "${PORT:-8080}:8080"
     environment:
-      - PORT=${PORT:-8080}
+      - PORT=8080
       - HF_TOKEN=${HF_TOKEN}
       - CLIENT_API_KEY=${CLIENT_API_KEY}
       - ALLOWED_ORIGINS=${ALLOWED_ORIGINS}
