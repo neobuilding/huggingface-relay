@@ -1,11 +1,14 @@
 # HF Relay (router.huggingface.co) - Relay template
 
-A small controlled relay service that forwards requests from clients to Hugging Face's router (<https://router.huggingface.co>), injecting the Hugging Face Bearer token on the server side. Useful when you must keep your HF token secret and still allow browser clients to call HF Inference APIs.
+A small controlled relay service that forwards requests from clients to Hugging Face's router (<https://router.huggingface.co>), injecting the Hugging Face Bearer token on the server side. Useful with restricted networks, rate limiting, and client authentication.
 
 Features
 
 - Server-side HF token injection (HF_TOKEN stored as env/secret)
-- Simple client authentication via `x-relay-key` header or `api_key` query param
+- Multiple client authentication methods:
+  - `x-relay-key` header (custom)
+  - `api_key` query parameter
+  - `Authorization: Bearer xxx` (standard HTTP)
 - CORS headers for browser clients
 - Basic rate limiting
 - Streaming-friendly proxy (does not buffer responses)
@@ -35,15 +38,33 @@ Quickstart (Docker Compose)
    curl http://localhost:8080/health
    ```
 
-Usage example
+Usage examples
 
-- The relay exposes endpoints under `/hf/*` which are forwarded to `https://router.huggingface.co/*`.
-- Example request to forward model inference (replace model/path as needed):
+The relay exposes endpoints under `/hf/*` which are forwarded to `https://router.huggingface.co/*`.
+
+**Using x-relay-key header (custom):**
 
 ```
 curl -X POST "http://localhost:8080/hf/models/gpt2/outputs" \
   -H "Content-Type: application/json" \
   -H "x-relay-key: change-me" \
+  -d '{"inputs":"Hello from relay"}'
+```
+
+**Using api_key query parameter:**
+
+```
+curl -X POST "http://localhost:8080/hf/models/gpt2/outputs?api_key=change-me" \
+  -H "Content-Type: application/json" \
+  -d '{"inputs":"Hello from relay"}'
+```
+
+**Using Authorization Bearer token (standard HTTP - recommended for most clients):**
+
+```
+curl -X POST "http://localhost:8080/hf/models/gpt2/outputs" \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer change-me" \
   -d '{"inputs":"Hello from relay"}'
 ```
 
