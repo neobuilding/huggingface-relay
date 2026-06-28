@@ -31,12 +31,24 @@ app.use(morgan(process.env.NODE_ENV === 'production' ? 'combined' : 'dev'));
 // Healthcheck
 app.get('/health', (_req, res) => res.json({ status: 'ok' }));
 
-// Simple client auth - require x-relay-key header or api_key query param
+// Simple client auth - support multiple auth methods:
+// 1. x-relay-key header
+// 2. api_key query parameter
+// 3. Authorization: Bearer token
 app.use((req, res, next) => {
   // allow health probe unauthenticated
   if (req.path === '/health') return next();
 
-  const key = req.header('x-relay-key') || req.query.api_key;
+  let key = req.header('x-relay-key') || req.query.api_key;
+  
+  // Support standard Authorization: Bearer xxx
+  if (!key) {
+    const authHeader = req.header('Authorization');
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+      key = authHeader.slice(7); // Remove "Bearer " prefix
+    }
+  }
+  
   if (!key || key !== CLIENT_API_KEY) {
     return res.status(401).json({ error: 'Unauthorized - invalid relay key' });
   }
