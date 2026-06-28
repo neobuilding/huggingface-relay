@@ -11,15 +11,12 @@ RUN npm ci --omit=dev
 # Copy files
 COPY . .
 
-# Default port (can be overridden by PORT env variable)
-ARG PORT=8080
-ENV PORT=${PORT}
-
-EXPOSE ${PORT}
+# Expose port
+EXPOSE 8080
 
 ENV NODE_ENV=production
 
 CMD ["node", "server.js"]
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
-  CMD wget --no-verbose --spider http://localhost:${PORT}/health || exit 1
+  CMD wget --no-verbose --spider http://localhost:8080/health || exit 1
