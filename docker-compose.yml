@@ -1,15 +1,15 @@
-version: '3.8'
+version: "3.8"
 
 services:
-  relay:
-    build: .
-    image: hf-relay:latest
-    restart: always
-    ports:
-      - "${PORT:-8080}:8080"
-    environment:
-      - PORT=8080
-      - HF_TOKEN=${HF_TOKEN}
-      - CLIENT_API_KEY=${CLIENT_API_KEY}
-      - ALLOWED_ORIGINS=${ALLOWED_ORIGINS}
-      - RATE_LIMIT=${RATE_LIMIT}
+    relay:
+        build: .
+        image: hf-relay:latest
+        restart: always
+        ports:
+            - "${PORT:-8080}:${PORT:-8080}"
+        environment:
+            - PORT=${PORT:-8080}
+            - HF_TOKEN=${HF_TOKEN}
+            - CLIENT_API_KEY=${CLIENT_API_KEY}
+            - ALLOWED_ORIGINS=${ALLOWED_ORIGINS}
+            - RATE_LIMIT=${RATE_LIMIT}
