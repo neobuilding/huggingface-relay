@@ -38,6 +38,12 @@ Quickstart (Docker Compose)
    curl http://localhost:8080/health
    ```
 
+5. Stop with Docker Compose:
+
+   ```bash
+   docker compose down --remove-orphans
+   ```
+
 ## Generating CLIENT_API_KEY
 
 CLIENT_API_KEY should be a strong, random secret string. Here are several methods to generate it:
@@ -89,7 +95,7 @@ The relay exposes endpoints under `/hf/*` which are forwarded to `https://router
 **Original Hugging Face request:**
 
 ```powershell
-curl "https://router.huggingface.co/v1/chat/completions" ^
+curl -i -X POST "https://router.huggingface.co/v1/chat/completions" ^
   -H "Authorization: Bearer $HF_TOKEN" ^
   -H "Content-Type: application/json" ^
   -d "{\"messages\":[{\"role\":\"user\",\"content\":\"What is the capital of France?\"}],\"model\":\"zai-org/GLM-5.2:novita\",\"stream\":false}"
@@ -98,7 +104,7 @@ curl "https://router.huggingface.co/v1/chat/completions" ^
 **Relay request:**
 
 ```powershell
-curl -X POST "http://localhost:8080/hf/v1/chat/completions" ^
+curl -i -X POST "http://localhost:8080/hf/v1/chat/completions" ^
   -H "Content-Type: application/json" ^
   -H "Authorization: Bearer change-me" ^
   -d "{\"messages\":[{\"role\":\"user\",\"content\":\"What is the capital of France?\"}],\"model\":\"zai-org/GLM-5.2:novita\",\"stream\":false}"
