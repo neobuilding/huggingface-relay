@@ -28,9 +28,10 @@ if (!HF_TOKEN) {
 app.use(helmet());
 app.use(morgan(process.env.NODE_ENV === 'production' ? 'combined' : 'dev'));
 
-// NOTE: Do NOT use express.json() before proxy middleware
-// http-proxy-middleware v4.x has issues with pre-parsed bodies
-// Instead, we let the proxy handle the raw request stream directly
+// Parse JSON and URL-encoded request bodies
+// This is BEFORE proxy so we can intercept and modify in onProxyReq
+app.use(express.json({ limit: '50mb' }));
+app.use(express.urlencoded({ limit: '50mb', extended: true }));
 
 // Healthcheck
 app.get('/health', (_req, res) => res.json({ status: 'ok' }));
@@ -107,7 +108,7 @@ const hfProxy = createProxyMiddleware({
     return path.replace(/^\/hf/, '');
   },
   onProxyReq: (proxyReq, req, res) => {
-    // Remove client-provided Authorization to avoid conflicts
+    // Remove any existing Authorization header from client
     proxyReq.removeHeader('Authorization');
     
     // Inject HF authorization header (server-side secret)
@@ -116,7 +117,16 @@ const hfProxy = createProxyMiddleware({
     // Remove cookies from client
     proxyReq.removeHeader('cookie');
     
-    console.log(`[PROXY_REQ] Path: ${req.method} ${req.path} | Target: ${proxyReq.path} | Auth: HF_TOKEN injected (len: ${HF_TOKEN.length}) | IP: ${req.ip}`);
+    console.log(`[PROXY_REQ] Path: ${req.method} ${req.path} | Target: ${proxyReq.path} | Auth: HF_TOKEN (len: ${HF_TOKEN.length}) | IP: ${req.ip}`);
+
+    // If request body exists (from express.json), re-write it to proxy request
+    if (req.body && Object.keys(req.body).length > 0) {
+      const bodyData = JSON.stringify(req.body);
+      proxyReq.setHeader('Content-Type', 'application/json');
+      proxyReq.setHeader('Content-Length', Buffer.byteLength(bodyData));
+      proxyReq.write(bodyData);
+      console.log(`[PROXY_REQ] Body re-written: ${bodyData.length} bytes`);
+    }
   },
   onProxyRes: (proxyRes, req, res) => {
     console.log(`[PROXY_RES] Path: ${req.method} ${req.path} | Status: ${proxyRes.statusCode}`);
