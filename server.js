@@ -28,12 +28,7 @@ if (!HF_TOKEN) {
 app.use(helmet());
 app.use(morgan(process.env.NODE_ENV === 'production' ? 'combined' : 'dev'));
 
-// Parse JSON and URL-encoded request bodies
-// This is BEFORE proxy so we can intercept and modify in onProxyReq
-app.use(express.json({ limit: '50mb' }));
-app.use(express.urlencoded({ limit: '50mb', extended: true }));
-
-// Healthcheck
+// Healthcheck (BEFORE auth/proxy so it's accessible)
 app.get('/health', (_req, res) => res.json({ status: 'ok' }));
 
 // Simple client auth - support multiple auth methods:
@@ -108,7 +103,7 @@ const hfProxy = createProxyMiddleware({
     return path.replace(/^\/hf/, '');
   },
   onProxyReq: (proxyReq, req, res) => {
-    // Remove any existing Authorization header from client
+    // Remove client-provided Authorization to avoid conflicts
     proxyReq.removeHeader('Authorization');
     
     // Inject HF authorization header (server-side secret)
@@ -117,16 +112,7 @@ const hfProxy = createProxyMiddleware({
     // Remove cookies from client
     proxyReq.removeHeader('cookie');
     
-    console.log(`[PROXY_REQ] Path: ${req.method} ${req.path} | Target: ${proxyReq.path} | Auth: HF_TOKEN (len: ${HF_TOKEN.length}) | IP: ${req.ip}`);
-
-    // If request body exists (from express.json), re-write it to proxy request
-    if (req.body && Object.keys(req.body).length > 0) {
-      const bodyData = JSON.stringify(req.body);
-      proxyReq.setHeader('Content-Type', 'application/json');
-      proxyReq.setHeader('Content-Length', Buffer.byteLength(bodyData));
-      proxyReq.write(bodyData);
-      console.log(`[PROXY_REQ] Body re-written: ${bodyData.length} bytes`);
-    }
+    console.log(`[PROXY_REQ] Path: ${req.method} ${req.path} | Target: ${proxyReq.path} | Auth: HF_TOKEN injected (len: ${HF_TOKEN.length}) | IP: ${req.ip}`);
   },
   onProxyRes: (proxyRes, req, res) => {
     console.log(`[PROXY_RES] Path: ${req.method} ${req.path} | Status: ${proxyRes.statusCode}`);
