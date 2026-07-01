@@ -40,18 +40,30 @@ app.use((req, res, next) => {
   if (req.path === '/health') return next();
 
   let key = req.header('x-relay-key') || req.query.api_key;
+  let authMethod = 'none';
   
   // Support standard Authorization: Bearer xxx
   if (!key) {
     const authHeader = req.header('Authorization');
     if (authHeader && authHeader.startsWith('Bearer ')) {
       key = authHeader.slice(7); // Remove "Bearer " prefix
+      authMethod = 'Authorization:Bearer';
     }
+  } else if (req.header('x-relay-key')) {
+    authMethod = 'x-relay-key';
+  } else if (req.query.api_key) {
+    authMethod = 'api_key';
   }
   
   if (!key || key !== CLIENT_API_KEY) {
+    const logMessage = !key
+      ? `[AUTH_FAILED] No auth provided | Method: ${authMethod} | Path: ${req.method} ${req.path} | IP: ${req.ip}`
+      : `[AUTH_FAILED] Invalid key | Method: ${authMethod} | Provided: ${key.slice(0, 10)}... | Path: ${req.method} ${req.path} | IP: ${req.ip}`;
+    console.warn(logMessage);
     return res.status(401).json({ error: 'Unauthorized - invalid relay key' });
   }
+  
+  console.log(`[AUTH_OK] Auth method: ${authMethod} | Path: ${req.method} ${req.path} | IP: ${req.ip}`);
   next();
 });
 
@@ -73,6 +85,10 @@ app.use(rateLimit({
   max: RATE_LIMIT,
   standardHeaders: true,
   legacyHeaders: false,
+  handler: (req, res) => {
+    console.warn(`[RATE_LIMIT_EXCEEDED] IP: ${req.ip} | Path: ${req.method} ${req.path}`);
+    res.status(429).json({ error: 'Too many requests, please try again later.' });
+  },
 }));
 
 // Proxy configuration: all requests under /hf/* -> https://router.huggingface.co/*
@@ -91,13 +107,18 @@ const hfProxy = createProxyMiddleware({
     proxyReq.setHeader('Authorization', `Bearer ${HF_TOKEN}`);
     // Remove cookies from client
     proxyReq.removeHeader('cookie');
+    
+    console.log(`[PROXY_REQ] Path: ${req.method} ${req.path} | Target: ${proxyReq.path} | IP: ${req.ip}`);
 
     // If body is already parsed by express (we didn't add body-parser), nothing to do.
     // We intentionally don't parse body to avoid buffering; http-proxy-middleware will pipe the request stream.
   },
+  onProxyRes: (proxyRes, req, res) => {
+    console.log(`[PROXY_RES] Path: ${req.method} ${req.path} | Status: ${proxyRes.statusCode}`);
+  },
   // Simplified onError: only handle genuine proxy/network errors and avoid writing when headers already sent.
   onError: (err, req, res) => {
-    console.error('Proxy network error:', err && err.message);
+    console.error(`[PROXY_ERROR] Path: ${req.method} ${req.path} | Error: ${err && err.message} | IP: ${req.ip}`);
     // If headers already sent, we must not attempt to write a response. Just end the connection.
     if (res.headersSent) {
       try { res.end(); } catch (e) { /* ignore */ }
@@ -124,5 +145,9 @@ app.get('/', (req, res) => {
 
 // Start
 app.listen(PORT, () => {
-  console.log(`HF Relay listening on port ${PORT}`);
+  console.log(`[START] HF Relay listening on port ${PORT}`);
+  console.log(`[CONFIG] CLIENT_API_KEY configured: ${CLIENT_API_KEY !== 'change-me' ? 'yes' : 'WARNING: using default (change-me)'}`);
+  console.log(`[CONFIG] HF_TOKEN configured: ${HF_TOKEN ? 'yes' : 'ERROR: missing'}`);
+  console.log(`[CONFIG] ALLOWED_ORIGINS: ${ALLOWED_ORIGINS.join(', ')}`);
+  console.log(`[CONFIG] RATE_LIMIT: ${RATE_LIMIT} req/min`);
 });
