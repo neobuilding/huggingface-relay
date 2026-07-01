@@ -2,11 +2,11 @@
  * HF Relay - server.js
  * 简单受控的 Hugging Face router relay（支持流式转发）
  *
- * 依赖: express http-proxy-middleware express-rate-limit helmet dotenv morgan
+ * 依赖: express express-http-proxy express-rate-limit helmet dotenv morgan
  */
 require('dotenv').config();
 const express = require('express');
-const { createProxyMiddleware } = require('http-proxy-middleware');
+const proxy = require('express-http-proxy');
 const rateLimit = require('express-rate-limit');
 const helmet = require('helmet');
 const morgan = require('morgan');
@@ -27,6 +27,11 @@ if (!HF_TOKEN) {
 // Basic middlewares
 app.use(helmet());
 app.use(morgan(process.env.NODE_ENV === 'production' ? 'combined' : 'dev'));
+
+// Parse JSON and URL-encoded request bodies
+// express-http-proxy will handle re-forwarding them correctly
+app.use(express.json({ limit: '50mb' }));
+app.use(express.urlencoded({ limit: '50mb', extended: true }));
 
 // Healthcheck (BEFORE auth/proxy so it's accessible)
 app.get('/health', (_req, res) => res.json({ status: 'ok' }));
@@ -92,50 +97,34 @@ app.use(rateLimit({
 }));
 
 // Proxy configuration: all requests under /hf/* -> https://router.huggingface.co/*
-const hfProxy = createProxyMiddleware({
-  target: 'https://router.huggingface.co',
-  changeOrigin: true,
-  secure: true,
-  ws: false,
-  // preserve path after /hf
-  pathRewrite: (path, req) => {
+// Using express-http-proxy for better body handling
+app.use('/hf', proxy('https://router.huggingface.co', {
+  proxyReqPathResolver: (req) => {
     // path example: /hf/models/xxx/outputs -> /models/xxx/outputs
-    return path.replace(/^\/hf/, '');
+    return req.url.replace(/^\/hf/, '');
   },
-  onProxyReq: (proxyReq, req, res) => {
-    // Remove client-provided Authorization to avoid conflicts
-    proxyReq.removeHeader('Authorization');
-    
+  proxyReqOptDecorator: (proxyReqOpts, srcReq) => {
     // Inject HF authorization header (server-side secret)
-    proxyReq.setHeader('Authorization', `Bearer ${HF_TOKEN}`);
+    proxyReqOpts.headers = proxyReqOpts.headers || {};
+    proxyReqOpts.headers['Authorization'] = `Bearer ${HF_TOKEN}`;
     
-    // Remove cookies from client
-    proxyReq.removeHeader('cookie');
+    // Remove client cookies
+    delete proxyReqOpts.headers['cookie'];
     
-    console.log(`[PROXY_REQ] Path: ${req.method} ${req.path} | Target: ${proxyReq.path} | Auth: HF_TOKEN injected (len: ${HF_TOKEN.length}) | IP: ${req.ip}`);
+    console.log(`[PROXY_REQ] Path: ${srcReq.method} ${srcReq.path} | Target: ${proxyReqOpts.path || srcReq.url.replace(/^\/hf/, '')} | Auth: HF_TOKEN injected (len: ${HF_TOKEN.length}) | IP: ${srcReq.ip}`);
+    
+    return proxyReqOpts;
   },
-  onProxyRes: (proxyRes, req, res) => {
-    console.log(`[PROXY_RES] Path: ${req.method} ${req.path} | Status: ${proxyRes.statusCode}`);
+  userResDecorator: (proxyRes, proxyResData, userReq, userRes) => {
+    // Log response status
+    console.log(`[PROXY_RES] Path: ${userReq.method} ${userReq.path} | Status: ${proxyRes.statusCode}`);
+    return proxyResData;
   },
-  // Error handler
   onError: (err, req, res) => {
     console.error(`[PROXY_ERROR] Path: ${req.method} ${req.path} | Error: ${err && err.message} | IP: ${req.ip}`);
-    if (res.headersSent) {
-      try { res.end(); } catch (e) { /* ignore */ }
-      return;
-    }
-
-    res.statusCode = 502;
-    res.setHeader('Content-Type', 'text/plain; charset=utf-8');
-    res.end('Bad Gateway');
-  },
-  proxyTimeout: 120000,
-  timeout: 120000,
-  // Keep response streaming (don't buffer)
-  selfHandleResponse: false,
-});
-
-app.use('/hf', hfProxy);
+    res.status(502).json({ error: 'Bad Gateway', details: err.message });
+  }
+}));
 
 // Root instructions
 app.get('/', (req, res) => {
