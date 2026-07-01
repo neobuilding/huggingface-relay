@@ -1,6 +1,6 @@
 # HF Relay (router.huggingface.co) - Relay template
 
-A small controlled relay service that forwards requests from clients to Hugging Face's router (<https://router.huggingface.co>), injecting the Hugging Face Bearer token on the server side. Useful with restricted networks, rate limiting, and client authentication.
+A small controlled relay service that forwards requests from clients to Hugging Face's router (<https://router.huggingface.co>), injecting the Hugging Face Bearer token on the server side. Useful with[...]
 
 Features
 
@@ -37,6 +37,50 @@ Quickstart (Docker Compose)
    ```bash
    curl http://localhost:8080/health
    ```
+
+## Generating CLIENT_API_KEY
+
+CLIENT_API_KEY should be a strong, random secret string. Here are several methods to generate it:
+
+**Option 1: Using OpenSSL (Linux/macOS)**
+
+```bash
+openssl rand -hex 32
+```
+
+This generates a 64-character hexadecimal string, e.g., `a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6q7r8s9t0u1v2w3x4y5z6a7b8c9d0e1f2`
+
+**Option 2: Using Python**
+
+```bash
+python3 -c "import secrets; print(secrets.token_hex(32))"
+```
+
+**Option 3: Using Node.js**
+
+```bash
+node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
+```
+
+**Option 4: Using /dev/urandom (Linux/macOS)**
+
+```bash
+head -c 32 /dev/urandom | base64
+```
+
+**Option 5: Using PowerShell (Windows)**
+
+```powershell
+[Convert]::ToBase64String([System.Security.Cryptography.RandomNumberGenerator]::GetBytes(32))
+```
+
+**Recommendation:** Use at least 32 bytes of entropy. For production, use Option 1 (OpenSSL) or Option 2 (Python) as they are simple, portable, and well-tested.
+
+Once generated, add it to your `.env` file:
+
+```bash
+CLIENT_API_KEY=your_generated_secret_key_here
+```
 
 Usage examples
 
