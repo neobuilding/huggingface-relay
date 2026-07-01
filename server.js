@@ -108,7 +108,7 @@ const hfProxy = createProxyMiddleware({
     return path.replace(/^\/hf/, '');
   },
   onProxyReq: (proxyReq, req, res) => {
-    // IMPORTANT: Remove existing Authorization header to avoid conflicts
+    // Remove existing Authorization header to avoid conflicts
     proxyReq.removeHeader('Authorization');
     
     // Inject HF authorization header (server-side secret)
@@ -117,15 +117,11 @@ const hfProxy = createProxyMiddleware({
     // Remove cookies from client
     proxyReq.removeHeader('cookie');
     
-    // If body was parsed and exists, re-write it to the proxy request
-    if (req.body && Object.keys(req.body).length > 0) {
-      const bodyData = JSON.stringify(req.body);
-      proxyReq.setHeader('Content-Type', 'application/json');
-      proxyReq.setHeader('Content-Length', Buffer.byteLength(bodyData));
-      proxyReq.write(bodyData);
-    }
+    console.log(`[PROXY_REQ] Path: ${req.method} ${req.path} | Target: ${proxyReq.path} | Auth: HF_TOKEN injected (length: ${HF_TOKEN.length}) | IP: ${req.ip}`);
     
-    console.log(`[PROXY_REQ] Path: ${req.method} ${req.path} | Target: ${proxyReq.path} | Auth: HF_TOKEN injected | IP: ${req.ip}`);
+    // NOTE: Do NOT manually write the body here. 
+    // http-proxy-middleware will automatically handle the request stream.
+    // If req.body exists (from body parser), http-proxy-middleware v5+ will handle it.
   },
   onProxyRes: (proxyRes, req, res) => {
     console.log(`[PROXY_RES] Path: ${req.method} ${req.path} | Status: ${proxyRes.statusCode}`);
