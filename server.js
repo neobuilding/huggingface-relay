@@ -5,6 +5,9 @@
  * 依赖: express express-http-proxy express-rate-limit helmet dotenv morgan
  */
 require('dotenv').config();
+const https = require('https');
+const http = require('http');
+const fs = require('fs');
 const express = require('express');
 const proxy = require('express-http-proxy');
 const rateLimit = require('express-rate-limit');
@@ -14,6 +17,9 @@ const morgan = require('morgan');
 const app = express();
 
 const PORT = parseInt(process.env.PORT || '8080', 10);
+const HTTPS_PORT = parseInt(process.env.HTTPS_PORT || '8443', 10);
+const SSL_CERT = process.env.SSL_CERT;
+const SSL_KEY = process.env.SSL_KEY;
 const HF_TOKEN = process.env.HF_TOKEN; // 必须设置
 const CLIENT_API_KEY = process.env.CLIENT_API_KEY || 'change-me';
 const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS || '*').split(',').map(s => s.trim());
@@ -131,12 +137,31 @@ app.get('/', (req, res) => {
   res.type('text/plain').send('HF Relay is running. See README for usage.');
 });
 
-// Start
-app.listen(PORT, () => {
-  console.log(`[START] HF Relay listening on port ${PORT}`);
-  console.log(`[CONFIG] CLIENT_API_KEY configured: ${CLIENT_API_KEY !== 'change-me' ? 'yes' : 'WARNING: using default (change-me)'}`);
-  console.log(`[CONFIG] HF_TOKEN configured: ${HF_TOKEN ? 'yes' : 'ERROR: missing'}`);
-  console.log(`[CONFIG] HF_TOKEN length: ${HF_TOKEN ? HF_TOKEN.length : 0}`);
-  console.log(`[CONFIG] ALLOWED_ORIGINS: ${ALLOWED_ORIGINS.join(', ')}`);
-  console.log(`[CONFIG] RATE_LIMIT: ${RATE_LIMIT} req/min`);
+// Start HTTP server
+http.createServer(app).listen(PORT, () => {
+  console.log(`[START] HF Relay (HTTP) listening on port ${PORT}`);
 });
+
+// Start HTTPS server if SSL certificates are configured
+if (SSL_CERT && SSL_KEY) {
+  try {
+    const options = {
+      cert: fs.readFileSync(SSL_CERT),
+      key: fs.readFileSync(SSL_KEY),
+    };
+    https.createServer(options, app).listen(HTTPS_PORT, () => {
+      console.log(`[START] HF Relay (HTTPS) listening on port ${HTTPS_PORT}`);
+    });
+    console.log(`[CONFIG] SSL configured: yes`);
+  } catch (err) {
+    console.error(`[ERROR] Failed to load SSL certificate: ${err.message}`);
+  }
+} else {
+  console.log(`[CONFIG] SSL configured: no (set SSL_CERT and SSL_KEY in .env to enable HTTPS)`);
+}
+
+console.log(`[CONFIG] CLIENT_API_KEY configured: ${CLIENT_API_KEY !== 'change-me' ? 'yes' : 'WARNING: using default (change-me)'}`);
+console.log(`[CONFIG] HF_TOKEN configured: ${HF_TOKEN ? 'yes' : 'ERROR: missing'}`);
+console.log(`[CONFIG] HF_TOKEN length: ${HF_TOKEN ? HF_TOKEN.length : 0}`);
+console.log(`[CONFIG] ALLOWED_ORIGINS: ${ALLOWED_ORIGINS.join(', ')}`);
+console.log(`[CONFIG] RATE_LIMIT: ${RATE_LIMIT} req/min`);
