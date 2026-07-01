@@ -28,13 +28,13 @@ Quickstart (Docker Compose)
    - `ALLOWED_ORIGINS` = comma-separated origins you allow (or `*` for testing)
 3. Start with Docker Compose:
 
-   ```
+   ```bash
    docker compose up -d --build
    ```
 
 4. Check health:
 
-   ```
+   ```bash
    curl http://localhost:8080/health
    ```
 
@@ -42,9 +42,27 @@ Usage examples
 
 The relay exposes endpoints under `/hf/*` which are forwarded to `https://router.huggingface.co/*`.
 
+**Original Hugging Face request:**
+
+```powershell
+curl "https://router.huggingface.co/v1/chat/completions" ^
+  -H "Authorization: Bearer $HF_TOKEN" ^
+  -H "Content-Type: application/json" ^
+  -d "{\"messages\":[{\"role\":\"user\",\"content\":\"What is the capital of France?\"}],\"model\":\"zai-org/GLM-5.2:novita\",\"stream\":false}"
+```
+
+**Relay request:**
+
+```powershell
+curl -X POST "http://localhost:8080/hf/v1/chat/completions" ^
+  -H "Content-Type: application/json" ^
+  -H "Authorization: Bearer change-me" ^
+  -d "{\"messages\":[{\"role\":\"user\",\"content\":\"What is the capital of France?\"}],\"model\":\"zai-org/GLM-5.2:novita\",\"stream\":false}"
+```
+
 **Using x-relay-key header (custom):**
 
-```
+```bash
 curl -X POST "http://localhost:8080/hf/models/gpt2/outputs" \
   -H "Content-Type: application/json" \
   -H "x-relay-key: change-me" \
@@ -53,7 +71,7 @@ curl -X POST "http://localhost:8080/hf/models/gpt2/outputs" \
 
 **Using api_key query parameter:**
 
-```
+```bash
 curl -X POST "http://localhost:8080/hf/models/gpt2/outputs?api_key=change-me" \
   -H "Content-Type: application/json" \
   -d '{"inputs":"Hello from relay"}'
@@ -61,7 +79,7 @@ curl -X POST "http://localhost:8080/hf/models/gpt2/outputs?api_key=change-me" \
 
 **Using Authorization Bearer token (standard HTTP - recommended for most clients):**
 
-```
+```bash
 curl -X POST "http://localhost:8080/hf/models/gpt2/outputs" \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer change-me" \
