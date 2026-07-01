@@ -11,8 +11,11 @@ RUN npm ci --omit=dev
 # Copy files
 COPY . .
 
-# Expose port
-EXPOSE 8080
+# Create certs directory for SSL certificates
+RUN mkdir -p /app/certs
+
+# Expose HTTP and HTTPS ports
+EXPOSE 8080 8443
 
 ENV NODE_ENV=production
 
