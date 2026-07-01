@@ -28,6 +28,11 @@ if (!HF_TOKEN) {
 app.use(helmet());
 app.use(morgan(process.env.NODE_ENV === 'production' ? 'combined' : 'dev'));
 
+// Parse JSON and URL-encoded request bodies BEFORE proxy
+// This ensures the body is available and headers are properly set before forwarding
+app.use(express.json({ limit: '50mb' }));
+app.use(express.urlencoded({ limit: '50mb', extended: true }));
+
 // Healthcheck
 app.get('/health', (_req, res) => res.json({ status: 'ok' }));
 
@@ -103,15 +108,24 @@ const hfProxy = createProxyMiddleware({
     return path.replace(/^\/hf/, '');
   },
   onProxyReq: (proxyReq, req, res) => {
+    // IMPORTANT: Remove existing Authorization header to avoid conflicts
+    proxyReq.removeHeader('Authorization');
+    
     // Inject HF authorization header (server-side secret)
     proxyReq.setHeader('Authorization', `Bearer ${HF_TOKEN}`);
+    
     // Remove cookies from client
     proxyReq.removeHeader('cookie');
     
-    console.log(`[PROXY_REQ] Path: ${req.method} ${req.path} | Target: ${proxyReq.path} | IP: ${req.ip}`);
-
-    // If body is already parsed by express (we didn't add body-parser), nothing to do.
-    // We intentionally don't parse body to avoid buffering; http-proxy-middleware will pipe the request stream.
+    // If body was parsed and exists, re-write it to the proxy request
+    if (req.body && Object.keys(req.body).length > 0) {
+      const bodyData = JSON.stringify(req.body);
+      proxyReq.setHeader('Content-Type', 'application/json');
+      proxyReq.setHeader('Content-Length', Buffer.byteLength(bodyData));
+      proxyReq.write(bodyData);
+    }
+    
+    console.log(`[PROXY_REQ] Path: ${req.method} ${req.path} | Target: ${proxyReq.path} | Auth: HF_TOKEN injected | IP: ${req.ip}`);
   },
   onProxyRes: (proxyRes, req, res) => {
     console.log(`[PROXY_RES] Path: ${req.method} ${req.path} | Status: ${proxyRes.statusCode}`);
@@ -148,6 +162,7 @@ app.listen(PORT, () => {
   console.log(`[START] HF Relay listening on port ${PORT}`);
   console.log(`[CONFIG] CLIENT_API_KEY configured: ${CLIENT_API_KEY !== 'change-me' ? 'yes' : 'WARNING: using default (change-me)'}`);
   console.log(`[CONFIG] HF_TOKEN configured: ${HF_TOKEN ? 'yes' : 'ERROR: missing'}`);
+  console.log(`[CONFIG] HF_TOKEN length: ${HF_TOKEN ? HF_TOKEN.length : 0}`);
   console.log(`[CONFIG] ALLOWED_ORIGINS: ${ALLOWED_ORIGINS.join(', ')}`);
   console.log(`[CONFIG] RATE_LIMIT: ${RATE_LIMIT} req/min`);
 });
