@@ -95,11 +95,19 @@ const hfProxy = createProxyMiddleware({
     // If body is already parsed by express (we didn't add body-parser), nothing to do.
     // We intentionally don't parse body to avoid buffering; http-proxy-middleware will pipe the request stream.
   },
+  // Simplified onError: only handle genuine proxy/network errors and avoid writing when headers already sent.
   onError: (err, req, res) => {
-    console.error('Proxy error:', err && err.message);
-    if (!res.headersSent) {
-      res.status(502).json({ error: 'Bad Gateway', detail: err.message });
+    console.error('Proxy network error:', err && err.message);
+    // If headers already sent, we must not attempt to write a response. Just end the connection.
+    if (res.headersSent) {
+      try { res.end(); } catch (e) { /* ignore */ }
+      return;
     }
+
+    // Minimal 502 response for network/proxy errors. Keep it simple so we don't overwrite upstream HTTP errors.
+    res.statusCode = 502;
+    res.setHeader('Content-Type', 'text/plain; charset=utf-8');
+    res.end('Bad Gateway');
   },
   proxyTimeout: 120000,
   timeout: 120000,
