@@ -28,10 +28,9 @@ if (!HF_TOKEN) {
 app.use(helmet());
 app.use(morgan(process.env.NODE_ENV === 'production' ? 'combined' : 'dev'));
 
-// Parse JSON and URL-encoded request bodies BEFORE proxy
-// This ensures the body is available and headers are properly set before forwarding
-app.use(express.json({ limit: '50mb' }));
-app.use(express.urlencoded({ limit: '50mb', extended: true }));
+// NOTE: Do NOT use express.json() before proxy middleware
+// http-proxy-middleware v4.x has issues with pre-parsed bodies
+// Instead, we let the proxy handle the raw request stream directly
 
 // Healthcheck
 app.get('/health', (_req, res) => res.json({ status: 'ok' }));
@@ -108,7 +107,7 @@ const hfProxy = createProxyMiddleware({
     return path.replace(/^\/hf/, '');
   },
   onProxyReq: (proxyReq, req, res) => {
-    // Remove existing Authorization header to avoid conflicts
+    // Remove client-provided Authorization to avoid conflicts
     proxyReq.removeHeader('Authorization');
     
     // Inject HF authorization header (server-side secret)
@@ -117,25 +116,19 @@ const hfProxy = createProxyMiddleware({
     // Remove cookies from client
     proxyReq.removeHeader('cookie');
     
-    console.log(`[PROXY_REQ] Path: ${req.method} ${req.path} | Target: ${proxyReq.path} | Auth: HF_TOKEN injected (length: ${HF_TOKEN.length}) | IP: ${req.ip}`);
-    
-    // NOTE: Do NOT manually write the body here. 
-    // http-proxy-middleware will automatically handle the request stream.
-    // If req.body exists (from body parser), http-proxy-middleware v5+ will handle it.
+    console.log(`[PROXY_REQ] Path: ${req.method} ${req.path} | Target: ${proxyReq.path} | Auth: HF_TOKEN injected (len: ${HF_TOKEN.length}) | IP: ${req.ip}`);
   },
   onProxyRes: (proxyRes, req, res) => {
     console.log(`[PROXY_RES] Path: ${req.method} ${req.path} | Status: ${proxyRes.statusCode}`);
   },
-  // Simplified onError: only handle genuine proxy/network errors and avoid writing when headers already sent.
+  // Error handler
   onError: (err, req, res) => {
     console.error(`[PROXY_ERROR] Path: ${req.method} ${req.path} | Error: ${err && err.message} | IP: ${req.ip}`);
-    // If headers already sent, we must not attempt to write a response. Just end the connection.
     if (res.headersSent) {
       try { res.end(); } catch (e) { /* ignore */ }
       return;
     }
 
-    // Minimal 502 response for network/proxy errors. Keep it simple so we don't overwrite upstream HTTP errors.
     res.statusCode = 502;
     res.setHeader('Content-Type', 'text/plain; charset=utf-8');
     res.end('Bad Gateway');
