@@ -6,10 +6,17 @@ services:
         image: hf-relay:latest
         restart: always
         ports:
-            - "${PORT:-8080}:${PORT:-8080}"
+            - "${PORT:-8080}:8080"
+            - "${HTTPS_PORT:-8443}:8443"
         environment:
             - PORT=${PORT:-8080}
+            - HTTPS_PORT=${HTTPS_PORT:-8443}
             - HF_TOKEN=${HF_TOKEN}
             - CLIENT_API_KEY=${CLIENT_API_KEY}
             - ALLOWED_ORIGINS=${ALLOWED_ORIGINS}
             - RATE_LIMIT=${RATE_LIMIT}
+            - SSL_CERT=${SSL_CERT:-}
+            - SSL_KEY=${SSL_KEY:-}
+        volumes:
+            # Optional: mount SSL certificates from host
+            - ${CERT_DIR:-./.certs}:/app/certs:ro
