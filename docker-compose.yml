@@ -6,8 +6,8 @@ services:
         image: hf-relay:latest
         restart: always
         ports:
-            - "${PORT:-8080}"
-            - "${HTTPS_PORT:-8443}"
+            - "${PORT:-8080}:${PORT:-8080}"
+            - "${HTTPS_PORT:-8443}:${HTTPS_PORT:-8443}"
         environment:
             - PORT=${PORT:-8080}
             - HTTPS_PORT=${HTTPS_PORT:-8443}
